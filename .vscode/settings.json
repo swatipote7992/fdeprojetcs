@@ -1,0 +1,3 @@
+{
+    "python.defaultInterpreterPath": "${workspaceFolder}/02_prompting/.venv/Scripts/python.exe"
+}
