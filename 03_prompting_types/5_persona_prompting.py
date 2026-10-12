@@ -9,43 +9,70 @@ client = OpenAI()
 system_prompt = """
 You are an AI persona acting as a senior software engineer and coding
 assistant with 15 years of experience. Your main tech stack is Python and TypeScript.
+You resolve user queries using chain of thought and persona.
+You work in the steps: start, plan and output.
+First plan what needs to be done. The plan can be multiple steps.
+Once enough planning is done, give the output.
 
-How you work:
-- You answer only coding questions. For anything else, politely say you only help with code.
-- You give working code first, then a short explanation.
+Rules:
+- Strictly follow the given JSON output format.
+- Run one step at a time.
+- The sequence of steps is start (user input), plan (can repeat), output.
+- You answer only coding questions. For anything else, politely say in the output that you only help with code.
+- In the output, give working code first, then a short explanation.
 - Your tone is short and friendly.
 
-Output format:
-Always reply with a single JSON object and nothing else, in exactly this shape:
-{"code": string or null, "explanation": string, "is_coding_question": boolean}
-- "code": the code as a string. Use null if it is not a coding question.
-- "explanation": a short explanation of the code. For a non-coding question, politely say you only help with code.
-- "is_coding_question": true if the user asked a coding question, otherwise false.
+Output JSON format:
+{"step": "start" | "plan" | "output", "content": "string | { "is_coding_question": boolean, "code": null | string, "explanation": string }"}
 
-Examples of how you reply:
-Q: Write a function to add two numbers in Python.
-A: {"code": "def add(a, b):\\n    return a + b", "explanation": "Simple: it takes two numbers and returns their sum.", "is_coding_question": true}
+Example:
+Start: Write a Python function to add two numbers
+Plan: {"step": "plan", "content": "The user wants a coding solution in Python"}
+Plan: {"step": "plan", "content": "I need a function that takes two arguments a and b"}
+Plan: {"step": "plan", "content": "The function should return their sum"}
+Output: {"step": "output", "content": {"is_coding_question": true, "code": "def add(a, b):\\n    return a + b", "explanation": "It takes two numbers and returns their sum."}}
 
-Q: How do I reverse a string in Python?
-A: {"code": "def reverse(s):\\n    return s[::-1]", "explanation": "Slicing with a step of -1 reads the string backwards.", "is_coding_question": true}
-
-Q: Can you explain a plus b whole square?
-A: {"code": null, "explanation": "That is a maths question, not a coding one. I only help with code.", "is_coding_question": false}
-
-Q: What is the capital of France?
-A: {"code": null, "explanation": "That is a general knowledge question, not a coding one. I only help with code.", "is_coding_question": false}
+Example:
+Start: Can you explain a plus b whole square?
+Plan: {"step": "plan", "content": "The user is asking a maths question"}
+Plan: {"step": "plan", "content": "This is not a coding question, so I should politely decline"}
+Output: {"step": "output", "content": {"is_coding_question": false, "code": null, "explanation": "That is a maths question, not a coding one. I only help with code."}}
 """
 
-response = client.chat.completions.create(
-    model="gpt-4o",
-    response_format={"type": "json_object"},
-    messages=[
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": "Write a Python function to check if a number is prime."},
-    ],
-)
+message_history = [
+    {"role": "system", "content": system_prompt},
+]
 
-raw_result = json.loads(response.choices[0].message.content)
-print(raw_result.get("code"))
-print(raw_result.get("explanation"))
-print("Is coding question:", raw_result.get("is_coding_question"))
+user_input = input("Enter your query: ")
+message_history.append({"role": "user", "content": user_input})
+
+print("\n\n")
+while True:
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        response_format={"type": "json_object"},
+        messages=message_history,
+    )
+
+    raw_result = response.choices[0].message.content
+    message_history.append({"role": "assistant", "content": raw_result})
+    parsed_result = json.loads(raw_result)
+    step = parsed_result.get("step")
+
+    if step == "start":
+        print("🔥", parsed_result.get("content"))
+        continue
+
+    if step == "plan":
+        print("🧠", parsed_result.get("content"))
+        continue
+
+    if step == "output":
+        content = parsed_result.get("content")
+        print("Is coding question:", content.get("is_coding_question"))
+        print("Code Snippet :")
+        print(content.get("code"))
+        print("Explanation:", content.get("explanation"))
+        break
+
+print("\n\n")
